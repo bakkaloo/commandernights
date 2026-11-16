@@ -693,9 +693,9 @@ function refreshAll(){ for(let u=0;u<unitCount();u++) refreshUnit(u); }
 /* tocco = ±1, tieni premuto = ±10 ripetuto */
 const pendingDelta={};
 function bindHold(el,u,sign){
-  let hold=null, rep=null, fired=true;   // fired=true finché non c'è un pointerdown su questo elemento
+  let hold=null, rep=null, fired=true;   // stays true until a pointerdown happens on this element
   const start=e=>{ e.preventDefault(); fired=false;
-    // rete di sicurezza: se il pannello viene ridisegnato durante la pressione, il rilascio arriva comunque a window
+    // safety net: if the panel is redrawn mid-press, the release still reaches window
     window.addEventListener('pointerup',cancel,{once:true}); window.addEventListener('pointercancel',cancel,{once:true});
     hold=setTimeout(()=>{ fired=true; changeLife(u,10*sign); rep=setInterval(()=>changeLife(u,10*sign),650); },450); };
   const end=e=>{ e.preventDefault(); clearTimeout(hold); clearInterval(rep); if(!fired) changeLife(u,sign); fired=true; };
@@ -705,7 +705,7 @@ function bindHold(el,u,sign){
   el.addEventListener('contextmenu',e=>e.preventDefault());
 }
 function add(path,d){ let o=G; for(let i=0;i<path.length-1;i++) o=o[path[i]]; const k=path[path.length-1]; o[k]=(o[k]||0)+d; save(); }
-/* aggiorna solo vita e avviso letale, senza ricostruire il pannello (che interromperebbe il tieni premuto) */
+/* updates only life and the lethal warning, without rebuilding the panel (which would break long-press) */
 function paintLife(u){
   const inner=document.querySelector(`.inner[data-u="${u}"]`); if(!inner) return null;
   const t=unitTarget(u); const el=inner.querySelector('.life');
