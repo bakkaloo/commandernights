@@ -30,6 +30,9 @@ jobs:
         run: |
           mkdir _site
           cp index.html sw.js manifest.webmanifest *.png _site/
+          # Show the release tag (e.g. v0.1.2) in the app settings
+          sed -i "s/__APP_VERSION__/${GITHUB_REF_NAME}/" _site/index.html
+          grep -q "APP_VERSION = '${GITHUB_REF_NAME}'" _site/index.html
 
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5

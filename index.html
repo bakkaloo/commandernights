@@ -218,6 +218,8 @@ table.rank td.pos{color:var(--gold);font-weight:800;text-align:center;width:28px
    ========================================================= */
 
 const KEY = 'cn-state-v1';
+const APP_VERSION = '__APP_VERSION__';   // replaced with the release tag by the deploy workflow
+const versionLabel = () => APP_VERSION.startsWith('__') ? 'versione di sviluppo' : APP_VERSION;
 const COLORS = ['#c0533b','#3b78c0','#3f9a62','#8a54b8','#c08a2c','#2f9fa3','#b8487f','#6b7280'];
 const DEFAULT_SETTINGS = {life1v1:40, ffaLife:40, hgLife:60, hgCmdMode:'player', cmdLethal:21, rotate:'table', keepAwake:true, cmdAlsoLife:true};
 const JUDGE_URL = 'https://claude.ai/project/01a1dc3f-3e20-7249-b5c0-effdbadf355d';
@@ -1169,7 +1171,7 @@ function viewSettings(v){
     <p class="small muted">${S.groups.length} gruppi · ${S.players.length} giocatori · ${S.games.length} partite salvate</p>
   </div>
   <button class="btn danger block" id="wipe">Cancella tutti i dati</button>
-  <p class="small muted" style="text-align:center;margin-top:16px">Commander Nights · dati carte da Scryfall · Magic: The Gathering è un marchio di Wizards of the Coast. App non ufficiale.</p>`;
+  <p class="small muted" style="text-align:center;margin-top:16px">Commander Nights <b>${esc(versionLabel())}</b> · dati carte da Scryfall · Magic: The Gathering è un marchio di Wizards of the Coast. App non ufficiale.</p>`;
   v.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ const k=b.dataset.st; s[k]=Math.max(1,s[k]+ +b.dataset.d); save(); setup=null; render(); });
   v.querySelectorAll('#cm button').forEach(b=>b.onclick=()=>{ s.hgCmdMode=b.dataset.v; save(); render(); });
   v.querySelectorAll('#rt button').forEach(b=>b.onclick=()=>{ s.rotate=b.dataset.v; save(); render(); });

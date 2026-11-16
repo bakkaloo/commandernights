@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- The current app version is shown at the bottom of the Settings page.
+
 ## v0.1.1 — 2026-11-16
 
 ### Changed
