@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.1 — 2026-11-16
+
 ### Changed
 - Deploy workflow updated to the Node 24 versions of the GitHub Pages actions.
 
