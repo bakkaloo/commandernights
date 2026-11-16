@@ -693,8 +693,10 @@ function refreshAll(){ for(let u=0;u<unitCount();u++) refreshUnit(u); }
 /* tocco = ±1, tieni premuto = ±10 ripetuto */
 const pendingDelta={};
 function bindHold(el,u,sign){
-  let hold=null, rep=null, fired=false;
+  let hold=null, rep=null, fired=true;   // fired=true finché non c'è un pointerdown su questo elemento
   const start=e=>{ e.preventDefault(); fired=false;
+    // rete di sicurezza: se il pannello viene ridisegnato durante la pressione, il rilascio arriva comunque a window
+    window.addEventListener('pointerup',cancel,{once:true}); window.addEventListener('pointercancel',cancel,{once:true});
     hold=setTimeout(()=>{ fired=true; changeLife(u,10*sign); rep=setInterval(()=>changeLife(u,10*sign),650); },450); };
   const end=e=>{ e.preventDefault(); clearTimeout(hold); clearInterval(rep); if(!fired) changeLife(u,sign); fired=true; };
   const cancel=()=>{ clearTimeout(hold); clearInterval(rep); fired=true; };
@@ -703,12 +705,22 @@ function bindHold(el,u,sign){
   el.addEventListener('contextmenu',e=>e.preventDefault());
 }
 function add(path,d){ let o=G; for(let i=0;i<path.length-1;i++) o=o[path[i]]; const k=path[path.length-1]; o[k]=(o[k]||0)+d; save(); }
+/* aggiorna solo vita e avviso letale, senza ricostruire il pannello (che interromperebbe il tieni premuto) */
+function paintLife(u){
+  const inner=document.querySelector(`.inner[data-u="${u}"]`); if(!inner) return null;
+  const t=unitTarget(u); const el=inner.querySelector('.life');
+  el.lastChild.textContent=t.life; el.classList.toggle('low', t.life<=10);
+  const out = G.format==='2hg' ? false : G.seats[u].out;
+  const lr = out?[]:lethalReasons(u); let lt=inner.querySelector('.lethal');
+  if(lr.length){ if(!lt){ lt=document.createElement('div'); lt.className='lethal'; inner.insertBefore(lt, inner.querySelector('.zone')); } lt.textContent='☠ '+lr.join(' · '); }
+  else if(lt) lt.remove();
+  return inner;
+}
 function changeLife(u,delta){
   add(lifePath(u),delta);
   const pd=pendingDelta[u] ||= {sum:0,t:null}; pd.sum+=delta; clearTimeout(pd.t);
-  pd.t=setTimeout(()=>{ delete pendingDelta[u]; refreshUnit(u); },1600);
-  refreshUnit(u);
-  const inner=document.querySelector(`.inner[data-u="${u}"]`);
+  pd.t=setTimeout(()=>{ delete pendingDelta[u]; const d=document.querySelector(`.inner[data-u="${u}"] .delta`); if(d) d.classList.add('hidden'); },1600);
+  const inner=paintLife(u);
   if(inner){ const el=inner.querySelector('.delta'); el.classList.remove('hidden','neg','pos'); el.classList.add(pd.sum<0?'neg':'pos'); el.textContent=(pd.sum>0?'+':'')+pd.sum; }
   try{ navigator.vibrate && navigator.vibrate(8); }catch(e){}
 }

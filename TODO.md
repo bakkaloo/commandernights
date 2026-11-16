@@ -2,7 +2,7 @@
 
 ## 1. Bug urgente
 
-- [ ] **Tieni premuto sul contavita non si ferma più.** Dopo un long-press la vita continua a scendere/salire di 10 ogni 0,65 s anche a dito staccato (verificato: 40 → 30 al rilascio → -20 dopo 3 s).
+- [x] **Tieni premuto sul contavita non si ferma più.** *(corretto)* Dopo un long-press la vita continua a scendere/salire di 10 ogni 0,65 s anche a dito staccato (verificato: 40 → 30 al rilascio → -20 dopo 3 s).
   - Causa: `changeLife` → `refreshUnit` ricostruisce l'HTML del pannello; l'elemento con il `setInterval` viene rimosso, il suo `pointerup` non arriva e `clearInterval(rep)` non viene mai eseguito (`index.html`, `bindHold` / `changeLife`).
   - Fix: aggiornare solo il numero della vita e il delta invece di rifare tutto il pannello, oppure tenere i timer fuori dall'elemento (per unità) e fermarli su qualsiasi `pointerup`/`pointercancel` del documento.
 
