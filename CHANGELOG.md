@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0 — 2026-11-16
+
 ### Fixed
 - Long-press on the life counter no longer keeps changing life after the finger is released.
 
