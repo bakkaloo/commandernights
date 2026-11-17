@@ -228,17 +228,63 @@ const COUNTERS = [ // segnalini e designazioni che stanno sul giocatore, non sul
   {k:'energia', l:'Energia'}, {k:'esperienza', l:'Esperienza'}, {k:'rad', l:'Rad', cr:'122.1i'},
   {k:'velocita', l:'Velocità', max:4, cr:'702.179'}, {k:'anello', l:'Tentazioni dell’Anello', cr:'701.54'}];
 
-let S = load();
 function blank(){ return {v:2, players:[], groups:[], games:[], settings:{...DEFAULT_SETTINGS}, current:null, lastGroup:null}; }
 function load(){
   let s=null;
   try{ const raw = localStorage.getItem(KEY); if(raw) s = JSON.parse(raw); }catch(e){}
   if(!s) return blank();
-  return migrate(s);
+  try{ return migrate(s); }catch(e){ return blank(); }
+}
+/* ---------- validation: stored data and imported backups are untrusted ----------
+   Every field that ends up in HTML without esc() (ids, colors, image URLs, numbers, format)
+   is normalized here, so an edited backup cannot inject markup or scripts. */
+const RX_HEX=/^#[0-9a-f]{3,8}$/i, RX_ID=/^[\w-]{1,64}$/, RX_IMG=/^https:\/\/cards\.scryfall\.io\/[\w\/.?=&-]+$/;
+const ID_KEYS=new Set(['id','pid','deckId','groupId','sfid','lastGroup']);
+const NUM_KEYS=new Set(['v','life','poison','place','points','bracket','startLife','start','durMs','cmdDealt','outSeq','outAt','t',
+  'team','monarch','initiative','threat','lethal','life1v1','ffaLife','hgLife','cmdLethal']);
+const NUM_MAPS=new Set(['tax','counters','cmd']);   // objects/arrays whose values are all numbers
+const arr = x => Array.isArray(x) ? x : [];
+const objs = x => arr(x).filter(o => o && typeof o==='object' && !Array.isArray(o));
+const num = v => { const n=Number(v); return Number.isFinite(n) ? n : null; };
+function clean(v, k, numMap){
+  if(k==='ci') return arr(v).filter(c=>/^[WUBRGC]$/.test(c));
+  if(Array.isArray(v)){
+    if(k==='members') return v.filter(x=>typeof x==='string' && RX_ID.test(x));
+    return v.map(x=>clean(x, k==='commanders' ? 'name' : k, numMap || NUM_MAPS.has(k)));
+  }
+  if(v && typeof v==='object'){
+    const o={};
+    for(const [kk,x] of Object.entries(v)) if(kk!=='__proto__' && kk!=='constructor' && kk!=='prototype')
+      o[kk]=clean(x, kk, NUM_MAPS.has(k));
+    return o;
+  }
+  if(typeof v!=='string') return v;
+  if(numMap || NUM_KEYS.has(k)) return num(v);
+  if(k==='color') return RX_HEX.test(v) ? v : COLORS[7];
+  if(k==='art' || k==='img') return RX_IMG.test(v) ? v : '';
+  if(ID_KEYS.has(k)) return RX_ID.test(v) ? v : null;
+  if(k==='format') return Object.hasOwn(FORMATS,v) ? v : 'ffa';
+  return v;
 }
 function migrate(s){
-  s.players ||= []; s.games ||= []; s.groups ||= [];
-  s.settings = {...DEFAULT_SETTINGS, ...(s.settings||{})};
+  if(!s || typeof s!=='object' || Array.isArray(s)) throw new Error('invalid data');
+  s = clean(s);
+  const settings = s.settings && typeof s.settings==='object' ? s.settings : {};
+  s.settings = {...DEFAULT_SETTINGS, ...settings};
+  for(const k of ['life1v1','ffaLife','hgLife','cmdLethal']) if(!(s.settings[k]>0)) s.settings[k]=DEFAULT_SETTINGS[k];
+  s.players = objs(s.players).filter(p=>p.id);
+  s.players.forEach(p=>{ p.color ||= COLORS[7];
+    p.decks = objs(p.decks).filter(d=>d.id); p.decks.forEach(d=>{ d.commanders = objs(d.commanders); }); });
+  s.groups = objs(s.groups).filter(g=>g.id);
+  s.groups.forEach(g=>{ g.members = arr(g.members); });
+  s.games = objs(s.games).filter(g=>g.id);
+  s.games.forEach(g=>{ g.seats = objs(g.seats);
+    g.seats.forEach(x=>{ x.commanders = arr(x.commanders).filter(c=>typeof c==='string'); x.infamate = objs(x.infamate); }); });
+  const c = s.current;
+  if(!c || typeof c!=='object' || !objs(c.seats).length || c.seats.length!==objs(c.seats).length) s.current = null;
+  else c.seats.forEach(x=>{ x.color ||= COLORS[7]; x.commanders = objs(x.commanders); x.infamate = objs(x.infamate);
+    x.tax = arr(x.tax).length ? x.tax : [0,0]; x.counters = x.counters && typeof x.counters==='object' ? x.counters : {};
+    x.cmd = x.cmd && typeof x.cmd==='object' ? x.cmd : {}; });
   if(!s.v || s.v<2){
     // v1: niente gruppi, formato dedotto dalla partita, partita in corso non compatibile
     s.games.forEach(g=>{ g.format = g.mode==='2hg' ? '2hg' : (g.seats.length===2 ? '1v1' : 'ffa');
@@ -251,6 +297,7 @@ function migrate(s){
   }
   return s;
 }
+let S = load();   // after the validation constants above (const is not hoisted)
 let saveTimer=null;
 function save(now){
   clearTimeout(saveTimer);
@@ -325,8 +372,17 @@ function confirm3(what, detail, onOk){
    ========================================================= */
 async function sf(path){
   const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),9000);
-  try{ const r=await fetch('https://api.scryfall.com'+path,{signal:ctrl.signal,headers:{'Accept':'application/json'}}); return await r.json(); }
+  try{ const r=await fetch('https://api.scryfall.com'+path,{signal:ctrl.signal,headers:{'Accept':'application/json'}});
+    // 404 = no cards found, 400 = query Scryfall cannot parse: both just mean "no results"
+    if(!r.ok && r.status!==404 && r.status!==400){ const e=new Error('Scryfall '+r.status); e.status=r.status; throw e; }
+    return await r.json(); }
   finally{ clearTimeout(t); }
+}
+/* message for a failed Scryfall call: rate limit, service down, or no connection */
+function sfErrMsg(e){
+  return e && e.status===429 ? 'Troppe ricerche ravvicinate: riprova tra qualche secondo.'
+    : e && e.status ? 'Scryfall non risponde in questo momento, riprova più tardi.'
+    : 'Serve la connessione per cercare su Scryfall.';
 }
 async function sfSearch(q, extra=''){
   let j = await sf(`/cards/search?q=${encodeURIComponent((q+' '+extra).trim())}&unique=cards&order=edhrec`);
@@ -349,7 +405,7 @@ function bindCardSearch(input, box, extra, onPick){
       try{ const cards=await sfSearch(val,extra); if(my!==seq) return;
         box.innerHTML = cards.length ? cards.slice(0,24).map((c,i)=>`<button data-i="${i}"><img loading="lazy" src="${esc(cardImgs(c).small)}" alt=""><div class="nm">${esc(c.name)}</div></button>`).join('') : '<span class="small muted">Nessuna carta trovata</span>';
         box.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>onPick(cards[+b.dataset.i]));
-      }catch(e){ if(my===seq) box.innerHTML='<span class="small muted">Serve la connessione per cercare su Scryfall. Puoi scrivere solo il nome.</span>'; }
+      }catch(e){ if(my===seq) box.innerHTML=`<span class="small muted">${sfErrMsg(e)} Puoi scrivere solo il nome.</span>`; }
     },350); };
 }
 
@@ -1077,7 +1133,7 @@ function viewCards(v){
   show();
   let tm=null;
   q.oninput=()=>{ clearTimeout(tm); cardQuery=q.value.trim(); if(cardQuery.length<2){ cardResults=[]; show(); return; }
-    tm=setTimeout(async()=>{ res.innerHTML='<p class="small muted">Cerco…</p>'; try{ cardResults=await sfSearch(cardQuery); show(); }catch(e){ res.innerHTML='<div class="empty">Serve la connessione per cercare su Scryfall.</div>'; } },380); };
+    tm=setTimeout(async()=>{ res.innerHTML='<p class="small muted">Cerco…</p>'; try{ cardResults=await sfSearch(cardQuery); show(); }catch(e){ res.innerHTML=`<div class="empty">${sfErrMsg(e)}</div>`; } },380); };
 }
 async function viewCard(v,c){
   setTitle(c.name);
@@ -1093,7 +1149,7 @@ async function viewCard(v,c){
   try{ const j=await sf(`/cards/${c.id}/rulings`); const el=$('#rul'); if(!el) return;
     el.classList.remove('muted','small');
     el.innerHTML = j.data && j.data.length ? j.data.map(r=>`<div class="ruling"><span class="tag">${esc(r.published_at)}</span> ${esc(r.comment)}</div>`).join('') : '<span class="small muted">Nessun ruling.</span>';
-  }catch(e){ const el=$('#rul'); if(el) el.textContent='Rulings non disponibili offline.'; }
+  }catch(e){ const el=$('#rul'); if(el) el.textContent = e && e.status ? 'Rulings non disponibili al momento, riprova più tardi.' : 'Rulings non disponibili offline.'; }
 }
 
 /* =========================================================
@@ -1189,10 +1245,11 @@ async function exportBackup(){
 }
 function importBackup(f){
   if(!f) return; const r=new FileReader();
-  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(!d.players||!d.games) throw 0;
-      confirmSheet(`Importare ${d.players.length} giocatori e ${d.games.length} partite? I dati attuali di questo dispositivo verranno sostituiti.`,'Importa',()=>{
-        S=migrate(d); setup=null; save(true); toast('Backup importato'); render(); });
-    }catch(e){ toast('File di backup non valido'); } };
+  r.onload=()=>{ let d;
+    try{ const raw=JSON.parse(r.result); if(!Array.isArray(raw.players)||!Array.isArray(raw.games)) throw 0; d=migrate(raw); }
+    catch(e){ toast('File di backup non valido'); return; }
+    confirmSheet(`Importare ${d.players.length} giocatori e ${d.games.length} partite? I dati attuali di questo dispositivo verranno sostituiti.`,'Importa',()=>{
+      S=d; setup=null; save(true); toast('Backup importato'); render(); }); };
   r.readAsText(f);
 }
 

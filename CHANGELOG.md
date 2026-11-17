@@ -4,6 +4,8 @@
 
 ### Fixed
 - The offline image cache no longer grows without limit: only commander art is kept (up to 300 images, oldest removed first) and it takes far less storage space. Card searches are no longer stored offline; card rulings are (up to 50). Existing caches are cleared once after the update.
+- Imported backups are now checked: invalid colors, ids, image links and numbers are corrected or removed, so a tampered backup file can no longer run code in the app. A damaged file is rejected before asking for confirmation.
+- Card searches now tell apart "no results", too many requests in a row, Scryfall being unavailable and no connection, instead of always showing "Nessuna carta trovata".
 
 ## v0.1.2 — 2026-11-16
 

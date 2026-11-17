@@ -16,8 +16,8 @@
 ## 3. Robustezza
 
 - [x] **Cache immagini senza limite** (`sw.js`): *(corretto: solo `art_crop` scaricate in CORS, tetto 300; API solo rulings, tetto 50; `VERSION` → `cn-v3`)* le immagini Scryfall sono risposte opache, Chrome conta circa 7 MB di quota per ognuna → rischio di esaurire lo spazio (incluso il localStorage). Mettere un tetto (es. 200 voci, eliminando le più vecchie) o mettere in cache solo le `art_crop` dei mazzi salvati. Stesso limite per la cache `-api`.
-- [ ] **Validare i backup importati**: `p.color`, gli id e gli URL delle immagini finiscono nell'HTML senza escape completo → un backup modificato potrebbe eseguire codice. Validare/normalizzare i campi in `migrate()` (colore = hex, id alfanumerici, URL solo `https://cards.scryfall.io/`).
-- [ ] **`sf()` non controlla `r.ok`**: con errori 429 (troppe richieste) o 5xx si vede "Nessuna carta trovata". Distinguere "nessun risultato" (404 di Scryfall) da errore di rete/servizio.
+- [x] **Validare i backup importati**: *(corretto: `clean()` in `migrate()`, vale anche per i dati già salvati)* `p.color`, gli id e gli URL delle immagini finiscono nell'HTML senza escape completo → un backup modificato potrebbe eseguire codice. Validare/normalizzare i campi in `migrate()` (colore = hex, id alfanumerici, URL solo `https://cards.scryfall.io/`).
+- [x] **`sf()` non controlla `r.ok`**: *(corretto: 404/400 = nessun risultato, 429 e altri errori con messaggio dedicato)* con errori 429 (troppe richieste) o 5xx si vede "Nessuna carta trovata". Distinguere "nessun risultato" (404 di Scryfall) da errore di rete/servizio.
 
 ## 4. Esperienza d'uso
 
