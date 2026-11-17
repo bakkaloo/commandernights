@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.2.0 — 2026-11-17
+
 ### Changed
 - The release script now updates the changelog and waits for a check: press Enter to commit, tag and push, or "n" to cancel and restore the changelog. Pushing is the default; use `--no-push` to skip it.
 - Better readability and easier taps on tablets such as the iPad: larger text and buttons on big screens, and on the game board the names, chips and warnings grow with the panel size.
