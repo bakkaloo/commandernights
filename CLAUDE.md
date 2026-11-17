@@ -12,3 +12,4 @@ Static PWA (life counter, groups, player profiles and leaderboards for Magic: Th
 1. **Update the changelog with every change.** Add an entry to the `## Unreleased` section of `CHANGELOG.md` for each change you make, in the same commit as the change. Group entries under `### Added`, `### Changed`, `### Fixed`, `### Removed`. Write them for users of the app, not as implementation details. Never rename `Unreleased` to a version by hand: `scripts/release.mjs` does that.
 2. **English for code and git.** Code comments, commit messages, changelog entries and PR descriptions are written in English. Commit messages: imperative mood, short subject (e.g. `Fix long-press on life counter not stopping`).
 3. **The app UI stays in Italian.** All user-facing text (labels, buttons, toasts, rules summaries) remains Italian.
+4. **If I talk to you in italian you talk to me in italian and same for every language.**

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- The offline image cache no longer grows without limit: only commander art is kept (up to 300 images, oldest removed first) and it takes far less storage space. Card searches are no longer stored offline; card rulings are (up to 50). Existing caches are cleared once after the update.
+
 ## v0.1.2 — 2026-11-16
 
 ### Added
