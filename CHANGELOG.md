@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.2.1 — 2026-11-17
+
 ### Fixed
 - On iPhone and iPad (iOS 27) the app installed on the Home Screen no longer has a blurred band coming down from the status bar over the top of the screen. The app now starts below the status bar. To get the fix, remove the app from the Home Screen and add it again from Safari.
 
