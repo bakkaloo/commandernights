@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- The release script now updates the changelog and waits for a check: press Enter to commit, tag and push, or "n" to cancel and restore the changelog. Pushing is the default; use `--no-push` to skip it.
 - Better readability and easier taps on tablets such as the iPad: larger text and buttons on big screens, and on the game board the names, chips and warnings grow with the panel size.
 - New drawn icons for the bottom tabs, the back button, Settings and the "›" arrows in player, group and seat lists, which look the same on every device (some text symbols showed up tiny or odd on iOS).
 - Small text (tags, rules references, table headers, stats) is a bit larger everywhere, and the − / + buttons, steppers and counters are at least 44 px, as Apple recommends.

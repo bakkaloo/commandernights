@@ -1,16 +1,22 @@
 #!/usr/bin/env node
-// Creates a new release: updates CHANGELOG.md, commits and tags vX.Y.Z.
+// Creates a new release: updates CHANGELOG.md, waits for you to check it,
+// then commits, tags vX.Y.Z and pushes (which triggers the Pages deploy).
 //
 //   node scripts/release.mjs --patch      v1.2.3 -> v1.2.4
 //   node scripts/release.mjs --minor      v1.2.3 -> v1.3.0
 //   node scripts/release.mjs --major      v1.2.3 -> v2.0.0
 //
+// Flow: CHANGELOG.md is written, then the script waits. Review (and edit if you
+// like) the file, then press Enter to commit, tag and push; type "n" or press
+// Ctrl+C to cancel and restore CHANGELOG.md.
+//
 // Options:
-//   --push      also push main and the tag (which triggers the Pages deploy)
+//   --no-push   commit and tag locally without pushing
 //   --dry-run   show what would happen without changing anything
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -20,9 +26,9 @@ const fail = msg => { console.error('✗ ' + msg); process.exit(1); };
 
 const args = process.argv.slice(2);
 const bump = ['major', 'minor', 'patch'].find(b => args.includes('--' + b));
-const push = args.includes('--push');
+const push = !args.includes('--no-push');   // --push is still accepted: pushing is now the default
 const dry = args.includes('--dry-run');
-if (!bump) fail('Specifica --patch, --minor o --major (più eventualmente --push / --dry-run).');
+if (!bump) fail('Specifica --patch, --minor o --major (più eventualmente --no-push / --dry-run).');
 
 // --- checks ---
 const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
@@ -49,7 +55,8 @@ if (!subjects.length) fail(`Nessun commit nuovo da ${last}: niente da rilasciare
 const date = new Date().toISOString().slice(0, 10);
 const file = join(root, 'CHANGELOG.md');
 const header = '# Changelog\n\n';
-const old = (existsSync(file) ? readFileSync(file, 'utf8') : header).replace(/\r\n/g, '\n');
+const existed = existsSync(file);
+const old = (existed ? readFileSync(file, 'utf8') : header).replace(/\r\n/g, '\n');
 let body = old.startsWith(header) ? old.slice(header.length) : old;
 const unreleased = body.match(/^## Unreleased\n([\s\S]*?)(?=^## |(?![\s\S]))/m);
 let notes = unreleased ? unreleased[1].trim() : '';
@@ -61,16 +68,38 @@ const updated = header + '## Unreleased\n\n' + section + (body.trim() ? '\n' + b
 console.log(`${last || '(nessuna release)'} → ${next}\n\n${section}`);
 if (dry) { console.log('(dry-run: nessuna modifica fatta)'); process.exit(0); }
 
-// --- commit, tag, push ---
+// --- write, then wait for the review ---
 writeFileSync(file, updated);
+console.log('✓ CHANGELOG.md aggiornato. Controllalo (puoi anche modificarlo) prima di continuare.');
+
+const restore = () => {
+  if (existed) git('checkout', '--', 'CHANGELOG.md'); else rmSync(file);
+  console.log('✗ Release annullata: CHANGELOG.md ripristinato, nessun commit né tag creato.');
+};
+const rl = createInterface({ input: process.stdin, output: process.stdout });
+const answer = await new Promise(resolve => {
+  rl.on('SIGINT', () => resolve(null));     // Ctrl+C
+  rl.on('close', () => resolve(null));      // Ctrl+D / stdin closed
+  rl.question(`\nInvio = commit, tag ${next}${push ? ' e push' : ''} · "n" = annulla: `, resolve);
+});
+rl.removeAllListeners('close'); rl.close();
+if (answer === null || /^n/i.test(answer.trim())) { restore(); process.exit(1); }
+
+// --- commit, tag, push ---
+const others = git('status', '--porcelain').split('\n').filter(l => l && !l.endsWith('CHANGELOG.md'));
+if (others.length) console.log(`! Altri file modificati non inclusi nella release:\n${others.join('\n')}`);
 git('add', 'CHANGELOG.md');
 git('commit', '-m', `Release ${next}`);
 git('tag', '-a', next, '-m', `Release ${next}`);
 console.log(`✓ Commit e tag ${next} creati.`);
 
 if (push) {
-  git('push', 'origin', 'main');
-  git('push', 'origin', next);
+  try {
+    git('push', 'origin', 'main');
+    git('push', 'origin', next);
+  } catch (e) {
+    fail(`Push non riuscito (${(e.stderr || e.message).trim()}).\n  Riprova con:  git push origin main && git push origin ${next}`);
+  }
   console.log(`✓ Push fatto: il deploy di ${next} parte su GitHub Actions.`);
 } else {
   console.log(`Per pubblicare:  git push origin main && git push origin ${next}`);

@@ -4,7 +4,7 @@ Static PWA (life counter, groups, player profiles and leaderboards for Magic: Th
 
 - Run locally: `npx serve .` (or VS Code Live Server).
 - Deploy: GitHub Pages, only when a `v*` tag is pushed (`.github/workflows/deploy.yml`).
-- Release: `node scripts/release.mjs --patch|--minor|--major [--push] [--dry-run]`.
+- Release: `node scripts/release.mjs --patch|--minor|--major [--no-push] [--dry-run]`. It updates `CHANGELOG.md`, waits for the user to review it, then on Enter commits, tags and pushes (`n` / Ctrl+C restores the changelog). It is interactive: let the user run it.
 - Planned work: `TODO.md` (tick items off when done).
 
 ## Rules
