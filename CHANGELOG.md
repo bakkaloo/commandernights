@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- New "Posti e orientamento" option in the game menu (☾): move players to a different spot on the board and choose, for each player, which side of the device they sit on so their life total faces them. "Auto" keeps the usual orientation of the spot, and "Ripristina" goes back to the starting layout. The choice is saved with the game in progress.
+
 ## v0.2.1 — 2026-11-17
 
 ### Fixed

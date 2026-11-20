@@ -62,6 +62,8 @@ nav.tabs button.on{color:var(--gold)}
 .seg{display:flex;background:var(--surface2);border-radius:10px;padding:3px;border:1px solid var(--line)}
 .seg button{flex:1;padding:8px;border-radius:8px;font-weight:600;color:var(--muted)}
 .seg button.on{background:var(--bg);color:var(--gold)}
+.rotseg button{font-size:1.15rem;padding:6px}
+.rotseg button:first-child{font-size:.9rem}
 input.txt,select.txt{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 label.fld{display:block;margin:10px 0 4px;font-size:.82rem;color:var(--muted)}
 .stepper{display:flex;align-items:center;gap:8px}
@@ -267,7 +269,7 @@ const RX_HEX=/^#[0-9a-f]{3,8}$/i, RX_ID=/^[\w-]{1,64}$/, RX_IMG=/^https:\/\/card
 const ID_KEYS=new Set(['id','pid','deckId','groupId','sfid','lastGroup']);
 const NUM_KEYS=new Set(['v','life','poison','place','points','bracket','startLife','start','durMs','cmdDealt','outSeq','outAt','t',
   'team','monarch','initiative','threat','lethal','life1v1','ffaLife','hgLife','cmdLethal']);
-const NUM_MAPS=new Set(['tax','counters','cmd']);   // objects/arrays whose values are all numbers
+const NUM_MAPS=new Set(['tax','counters','cmd','order','rot']);   // objects/arrays whose values are all numbers
 const arr = x => Array.isArray(x) ? x : [];
 const objs = x => arr(x).filter(o => o && typeof o==='object' && !Array.isArray(o));
 const num = v => { const n=Number(v); return Number.isFinite(n) ? n : null; };
@@ -291,6 +293,15 @@ function clean(v, k, numMap){
   if(k==='format') return Object.hasOwn(FORMATS,v) ? v : 'ffa';
   return v;
 }
+/* game board view: order[slot] = unit shown in that slot, rot[unit] = forced rotation (null = follow the slot) */
+const ROTS=[0,90,180,270];
+function cleanView(v, n){
+  const ids=[...Array(n).keys()];
+  const order = v && Array.isArray(v.order) ? v.order : [];
+  const okOrder = order.length===n && ids.every(i=>order.includes(i));
+  const rot = v && Array.isArray(v.rot) ? v.rot : [];
+  return {order: okOrder ? order.slice() : ids, rot: ids.map(i=>ROTS.includes(rot[i]) ? rot[i] : null)};
+}
 function migrate(s){
   if(!s || typeof s!=='object' || Array.isArray(s)) throw new Error('invalid data');
   s = clean(s);
@@ -310,6 +321,7 @@ function migrate(s){
   else c.seats.forEach(x=>{ x.color ||= COLORS[7]; x.commanders = objs(x.commanders); x.infamate = objs(x.infamate);
     x.tax = arr(x.tax).length ? x.tax : [0,0]; x.counters = x.counters && typeof x.counters==='object' ? x.counters : {};
     x.cmd = x.cmd && typeof x.cmd==='object' ? x.cmd : {}; });
+  if(s.current) s.current.view = cleanView(s.current.view, s.current.format==='2hg' ? 2 : s.current.seats.length);
   if(!s.v || s.v<2){
     // v1: niente gruppi, formato dedotto dalla partita, partita in corso non compatibile
     s.games.forEach(g=>{ g.format = g.mode==='2hg' ? '2hg' : (g.seats.length===2 ? '1v1' : 'ffa');
@@ -672,7 +684,9 @@ function drawBoard(){
   if(!G) return;
   const b=$('#board'); const L=layout(); b.innerHTML='';
   const W=b.clientWidth, H=b.clientHeight;
-  L.forEach((r,u)=>{
+  G.view = cleanView(G.view, unitCount());
+  L.forEach((slot,k)=>{
+    const u=G.view.order[k]; const fr=G.view.rot[u]; const r = fr==null ? slot : {...slot, r:fr};
     const p=document.createElement('div'); p.className='panel';
     Object.assign(p.style,{left:r.x+'%',top:r.y+'%',width:r.w+'%',height:r.h+'%'});
     const pw=W*r.w/100-6, ph=H*r.h/100-6; const side=(r.r===90||r.r===270);
@@ -900,14 +914,46 @@ function gameMenu(){
   sheet(`<h2>${FORMATS[G.format]} · ${fmtDur(Date.now()-G.start)}</h2>
     <button class="btn block" data-a="dice">🎲 Dadi</button>
     <div class="row" style="margin-top:8px"><button class="btn grow" data-a="threat">◎ Minaccia</button><button class="btn grow" data-a="inf">☠ Infamata</button></div>
+    <button class="btn block" style="margin-top:8px" data-a="seats">⇅ Posti e orientamento</button>
     <button class="btn primary block" style="margin-top:8px" data-a="end">Fine partita</button>
     <button class="btn block" style="margin-top:8px" data-a="exit">Esci (la partita resta salvata)</button>`,(el,close)=>{
     el.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ close(); const a=b.dataset.a;
       if(a==='dice') diceSheet();
+      if(a==='seats') seatsSheet();
       if(a==='threat'){ pickMode='threat'; drawBoard(); }
       if(a==='inf'){ pickMode='infamata'; drawBoard(); }
       if(a==='end') endGameSheet();
       if(a==='exit') closeGame(); });
+  });
+}
+/* ---------- order of the players on the board and side each score faces ---------- */
+const ROT_OPTS=[{v:null,l:'Auto',t:'Segue la posizione'},{v:0,l:'↓',t:'Giocatore in basso'},{v:180,l:'↑',t:'Giocatore in alto'},
+  {v:90,l:'←',t:'Giocatore a sinistra'},{v:270,l:'→',t:'Giocatore a destra'}];
+function slotPlace(r){
+  const cy=r.y+r.h/2, cx=r.x+r.w/2;
+  const v = cy<34 ? 'in alto' : cy>66 ? 'in basso' : 'al centro';
+  const h = r.w>=100 ? '' : cx<50 ? ' a sinistra' : ' a destra';
+  return v==='al centro' && h ? h.trim() : v+h;
+}
+function seatsSheet(){
+  sheet(`<h2>Posti e orientamento</h2><div id="sl"></div>
+    <p class="small muted">Le frecce spostano il giocatore in un altro posto. Sotto scegli il lato del dispositivo dove siede, così il punteggio è dritto per lui.</p>
+    <div class="row"><button class="btn grow" data-reset>Ripristina</button><button class="btn primary grow" data-ok>Fatto</button></div>`,(el,close)=>{
+    const paint=()=>{
+      const L=layout(), n=unitCount(), V=G.view;
+      el.querySelector('#sl').innerHTML = V.order.map((u,k)=>`<div class="list-item" style="display:block">
+        <div class="row" style="align-items:center"><div class="grow"><b>${esc(unitName(u))}</b><div class="small muted">Posto ${k+1} · ${slotPlace(L[k])}</div></div>
+          <button class="btn" data-mv="${k}" data-d="-1" ${k===0?'disabled':''} aria-label="Sposta su">▲</button>
+          <button class="btn" data-mv="${k}" data-d="1" ${k===n-1?'disabled':''} aria-label="Sposta giù">▼</button></div>
+        <div class="seg rotseg" style="margin-top:8px">${ROT_OPTS.map((o,j)=>`<button data-u="${u}" data-r="${j}" title="${o.t}" aria-label="${o.t}" class="${V.rot[u]===o.v?'on':''}">${o.l}</button>`).join('')}</div>
+      </div>`).join('');
+      el.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{ const k=+b.dataset.mv, j=k+(+b.dataset.d);
+        [V.order[k],V.order[j]]=[V.order[j],V.order[k]]; save(); drawBoard(); paint(); });
+      el.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{ V.rot[+b.dataset.u]=ROT_OPTS[+b.dataset.r].v; save(); drawBoard(); paint(); });
+    };
+    paint();
+    el.querySelector('[data-reset]').onclick=()=>{ G.view=cleanView(null, unitCount()); save(); drawBoard(); paint(); };
+    el.querySelector('[data-ok]').onclick=close;
   });
 }
 function diceSheet(){
