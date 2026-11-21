@@ -4,6 +4,7 @@
 
 ### Added
 - In 2v2 the "Posti a caso" button becomes "Sorteggia squadre": the four players are drawn into two new random teams with a short animation, where the names shake in the "urn" and are drawn one at a time into team A and team B. "Rimescola" draws again. If the device is set to reduce motion, the result is shown right away.
+- At the top of the "Parole chiave" column, a link to the Italian Magic wiki for the keywords that are not in the list.
 
 ### Changed
 - With 5 players in the "Tutto intorno" layout, the two players in the left column now sit at the short sides: the top one faces the top edge and the bottom one faces the bottom edge, so the table has two players at each short side and one on the right.
