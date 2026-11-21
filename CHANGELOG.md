@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.0 — 2026-11-21
+
 ### Added
 - When creating a game you now choose how the players sit around the table: "Fronte a fronte" (half on each short side), "Tutto intorno" (one per short side, the others on the long sides) or "Ai lati" (on the long sides). Every life total faces the player sitting on that side. Each option shows a small preview of the board, and only the layouts that fit the number of players are offered. The last choice is remembered for the next game.
 - New "Ordine dei giocatori" in the game setup: a small map shows the numbered seats, clockwise like the turn order, and the number next to each player is their seat. Drag a player by the ≡ handle to change the order, or use "Posti a caso" to shuffle the seats. In 2v2, dragging a player into the other team's box moves them to that team.
