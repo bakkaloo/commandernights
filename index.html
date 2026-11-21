@@ -87,6 +87,25 @@ table.rank td.pos{color:var(--gold);font-weight:800;text-align:center;width:28px
 .slot{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;background:var(--bg);border:1px solid var(--line);margin-bottom:8px}
 .slot .num{width:22px;text-align:center;color:var(--muted);font-weight:700}
 .team-box{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.lay-opts{display:flex;gap:8px;flex-wrap:wrap}
+.lay-opts button{flex:1;min-width:64px;max-width:104px;padding:6px 6px 5px;border-radius:10px;border:1px solid var(--line);background:var(--bg);
+  color:var(--muted);font-size:.76rem;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:5px}
+.lay-opts button.on{border-color:var(--gold);color:var(--gold)}
+.lay-opts svg{width:100%;max-height:96px}
+svg.board-map{display:block}
+svg.board-map rect{fill:var(--surface2);stroke:var(--line);stroke-width:1.5}
+.lay-opts button.on svg.board-map rect{fill:#2a2415;stroke:var(--gold)}
+svg.board-map .gl circle,svg.board-map .gl path{fill:none;stroke:currentColor;stroke-width:1.4}
+svg.board-map text{fill:var(--gold);font-weight:800;text-anchor:middle;dominant-baseline:central}
+.seat-head{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.seatmap{flex:none;width:104px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:5px}
+.seatmap svg{width:100%}
+.slot{position:relative;transition:transform .15s ease}
+.slot .num{flex:none;width:26px;height:26px;line-height:26px;border-radius:7px;background:#2a2415;color:var(--gold);font-weight:800}
+.slot .drag{flex:none;align-self:stretch;display:flex;align-items:center;justify-content:center;width:44px;margin:-8px -8px -8px 0;
+  color:var(--muted);touch-action:none;cursor:grab}
+.slot.dragging{transition:none;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.5);border-color:var(--gold)}
+.slot.dragging .drag{cursor:grabbing;color:var(--gold)}
 .team-box h3{margin:0 0 8px;font-size:.9rem;color:var(--gold)}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .card-grid img{width:100%;border-radius:8px;display:block}
@@ -246,7 +265,10 @@ const KEY = 'cn-state-v1';
 const APP_VERSION = '__APP_VERSION__';   // replaced with the release tag by the deploy workflow
 const versionLabel = () => APP_VERSION.startsWith('__') ? 'versione di sviluppo' : APP_VERSION;
 const COLORS = ['#c0533b','#3b78c0','#3f9a62','#8a54b8','#c08a2c','#2f9fa3','#b8487f','#6b7280'];
-const DEFAULT_SETTINGS = {life1v1:40, ffaLife:40, hgLife:60, hgCmdMode:'player', cmdLethal:21, rotate:'table', keepAwake:true, cmdAlsoLife:true};
+const DEFAULT_SETTINGS = {life1v1:40, ffaLife:40, hgLife:60, hgCmdMode:'player', cmdLethal:21, layout:'sides', keepAwake:true, cmdAlsoLife:true};
+/* board layouts, chosen when creating a game; ok(n) = available for n panels */
+const LAYOUTS = {ends:{l:'Fronte a fronte', ok:n=>n<=6}, around:{l:'Tutto intorno', ok:n=>n>=4},
+  sides:{l:'Ai lati', ok:n=>n>=3}};
 const JUDGE_URL = 'https://claude.ai/project/01a1dc3f-3e20-7249-b5c0-effdbadf355d';
 const FORMATS = {'1v1':'1 contro 1', ffa:'Tutti contro tutti', '2hg':'2v2 Two-Headed Giant'};
 const COUNTERS = [ // segnalini e designazioni che stanno sul giocatore, non sul campo
@@ -295,6 +317,9 @@ function migrate(s){
   if(!s || typeof s!=='object' || Array.isArray(s)) throw new Error('invalid data');
   s = clean(s);
   const settings = s.settings && typeof s.settings==='object' ? s.settings : {};
+  // replaces the old "rotate" setting; unknown layouts (e.g. the removed "flat") fall back to "sides"
+  if(!Object.hasOwn(LAYOUTS, settings.layout)) settings.layout = 'sides';
+  delete settings.rotate;
   s.settings = {...DEFAULT_SETTINGS, ...settings};
   for(const k of ['life1v1','ffaLife','hgLife','cmdLethal']) if(!(s.settings[k]>0)) s.settings[k]=DEFAULT_SETTINGS[k];
   s.players = objs(s.players).filter(p=>p.id);
@@ -319,6 +344,10 @@ function migrate(s){
       s.groups.push(g); s.games.forEach(x=>x.groupId=g.id); s.lastGroup=g.id;
     }
     s.current=null; s.v=2;
+  }
+  if(s.current){
+    if(!Object.hasOwn(LAYOUTS, s.current.layout)) s.current.layout = s.settings.layout;
+    delete s.current.view;   // seat order/orientation from v0.3.0, replaced by the layout chosen at setup
   }
   return s;
 }
@@ -467,9 +496,11 @@ let setup = null;
 function lifeFor(fmt){ return fmt==='2hg' ? S.settings.hgLife : fmt==='1v1' ? S.settings.life1v1 : S.settings.ffaLife; }
 function newSetup(){
   const gid = S.lastGroup && group(S.lastGroup) ? S.lastGroup : (S.groups[0]?.id || null);
-  return {format:'ffa', n:4, groupId:gid, life:lifeFor('ffa'), seats:Array.from({length:8},()=>({pid:null,guest:'',deckId:null,tmpDeck:null}))};
+  return {format:'ffa', n:4, groupId:gid, life:lifeFor('ffa'), layout:S.settings.layout,
+    seats:Array.from({length:8},()=>({pid:null,guest:'',deckId:null,tmpDeck:null}))};
 }
 function seatCount(){ return setup.format==='2hg' ? 4 : setup.format==='1v1' ? 2 : setup.n; }
+function setupUnits(){ return setup.format==='2hg' ? 2 : seatCount(); }   // panels on the board
 function viewHome(v){
   setTitle('Commander Nights');
   setup ||= newSetup();
@@ -480,7 +511,6 @@ function viewHome(v){
     html+=`<div class="card"><h2>Partita in corso</h2><p class="muted small">${FORMATS[g.format]} · ${esc(group(g.groupId)?.name||'')} · ${fmtDur(Date.now()-g.start)} · ${g.seats.map(s=>esc(s.name)).join(', ')}</p>
       <div class="row"><button class="btn primary grow" id="resume">Riprendi</button><button class="btn danger" id="abandon">Annulla partita</button></div></div>`;
   }
-  const n=seatCount();
   html+=`<div class="card"><h2>Nuova partita</h2>
     <label class="fld" style="margin-top:0">Formato</label>
     <div class="seg" id="fmtSeg">${Object.keys(FORMATS).map(f=>`<button data-f="${f}" class="${setup.format===f?'on':''}">${f==='2hg'?'2v2':FORMATS[f]}</button>`).join('')}</div>
@@ -493,11 +523,8 @@ function viewHome(v){
   if(setup.format==='ffa'){
     html+=`<label class="fld">Numero di giocatori</label><div class="stepper"><button id="nMinus">−</button><b>${setup.n}</b><button id="nPlus">+</button></div>`;
   }
-  html+=`<label class="fld">Giocatori</label>`;
-  if(setup.format==='2hg'){
-    html+=`<div class="team-box"><h3>Squadra A</h3>${slotHtml(0)}${slotHtml(1)}</div><div class="team-box"><h3>Squadra B</h3>${slotHtml(2)}${slotHtml(3)}</div>`;
-  } else for(let i=0;i<n;i++) html+=slotHtml(i);
-  html+=`<button class="btn primary block" style="margin-top:6px" id="start">Inizia partita</button></div>`;
+  html+=`<div id="seating"></div>
+    <button class="btn primary block" style="margin-top:6px" id="start">Inizia partita</button></div>`;
   if(!S.players.length) html+=`<div class="card muted small">Crea i profili nella scheda <b>Giocatori</b> e un gruppo qui sopra: le partite finiscono nella classifica e nello storico del gruppo. Gli ospiti si aggiungono al volo.</div>`;
   v.innerHTML=html;
 
@@ -512,8 +539,83 @@ function viewHome(v){
     $('#nMinus').onclick=()=>{ setup.n=Math.max(3,setup.n-1); render(); };
     $('#nPlus').onclick=()=>{ setup.n=Math.min(8,setup.n+1); render(); };
   }
-  v.querySelectorAll('[data-slot]').forEach(b=>b.onclick=()=>pickSeat(+b.dataset.slot));
+  paintSeating($('#seating'));
   $('#start').onclick=startGame;
+}
+
+/* ---------- layout and seat order (repainted on its own, so the page does not scroll back up) ---------- */
+function boardSvg(fam, n, cellFn, maxAspect=2.1){
+  const aspect=Math.min(maxAspect, Math.max(0.6, innerHeight/innerWidth));   // shape of this device's screen
+  const VW=100, VH=Math.round(VW*aspect), g=1.2;
+  const cells=slotsFor(fam, n).cells.map((c,k)=>{
+    const x=c.x*VW/100+g, y=c.y*VH/100+g, cw=c.w*VW/100-2*g, ch=c.h*VH/100-2*g;
+    const lw = c.r%180 ? ch : cw, lh = c.r%180 ? cw : ch;   // cell size as seen by its player
+    return `<g class="pc" data-cell="${k}"><rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="3" vector-effect="non-scaling-stroke"/>
+      <g transform="translate(${x+cw/2} ${y+ch/2}) rotate(${c.r})">${cellFn(k,lw,lh,c.r)}</g></g>`;
+  }).join('');
+  return `<svg class="board-map" viewBox="0 0 ${VW} ${VH}" aria-hidden="true">${cells}</svg>`;
+}
+function personGlyph(k,w,h){
+  const s=Math.min(w,h)*0.4/20;
+  return `<g class="gl" transform="scale(${s})"><circle cx="0" cy="-3" r="4.5" vector-effect="non-scaling-stroke"/><path d="M-8 9a8 7 0 0 1 16 0z" vector-effect="non-scaling-stroke"/></g>`;
+}
+function seatLabel(k,w,h,r){   // seat number (team letter in 2v2), upright for whoever reads the setup
+  const fs=Math.min(w,h)*0.5;
+  return `<text class="n" font-size="${fs}" transform="rotate(${-r})">${setup.format==='2hg'?(k?'B':'A'):k+1}</text>`;
+}
+function swapUnits(a,b){
+  const idx = u => setup.format==='2hg' ? [2*u,2*u+1] : [u];
+  const A=idx(a), B=idx(b);
+  A.forEach((i,j)=>{ [setup.seats[i],setup.seats[B[j]]]=[setup.seats[B[j]],setup.seats[i]]; });
+}
+function paintSeating(box){
+  const n=setupUnits(), fam=layoutFam(setup.layout, n), hg=setup.format==='2hg';
+  const opts=Object.keys(LAYOUTS).filter(f=>LAYOUTS[f].ok(n));
+  let html=`<label class="fld">Disposizione al tavolo</label>
+    <div class="lay-opts">${opts.map(f=>`<button data-lay="${f}" class="${f===fam?'on':''}" aria-pressed="${f===fam}">${boardSvg(f,n,personGlyph)}<span>${LAYOUTS[f].l}</span></button>`).join('')}</div>
+    <label class="fld">Ordine dei giocatori</label>
+    <div class="seat-head"><div class="seatmap">${boardSvg(fam,n,seatLabel,1.4)}</div>
+      <div class="grow"><p class="small muted" style="margin:0 0 8px">${hg ? 'Ogni squadra siede dal lato della sua lettera.' : 'Il numero è il posto sulla mappa: si gira in senso orario, come l’ordine di turno.'}
+        Trascina <b>≡</b> per cambiare l’ordine.</p>
+        <button class="btn" id="shuf">Posti a caso</button></div></div>`;
+  if(hg){
+    html+=`<div class="team-box"><h3>Squadra A</h3>${slotHtml(0)}${slotHtml(1)}</div><div class="team-box"><h3>Squadra B</h3>${slotHtml(2)}${slotHtml(3)}</div>`;
+  } else for(let i=0;i<n;i++) html+=slotHtml(i);
+  box.innerHTML=html;
+  box.querySelectorAll('[data-lay]').forEach(b=>b.onclick=()=>{ setup.layout=b.dataset.lay; paintSeating(box); });
+  box.querySelector('#shuf').onclick=()=>{ for(let i=n-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); if(i!==j) swapUnits(i,j); }
+    paintSeating(box); };
+  box.querySelectorAll('[data-slot]').forEach(b=>b.onclick=e=>{ if(!e.target.closest('.drag')) pickSeat(+b.dataset.slot); });
+  bindSeatDrag(box);
+}
+/* drag & drop of the seat rows by their ≡ handle (pointer events: works with touch, mouse and pen) */
+function bindSeatDrag(box){
+  const rows=[...box.querySelectorAll('.slot[data-slot]')];
+  rows.forEach(row=>{
+    const h=row.querySelector('.drag');
+    h.addEventListener('pointerdown',e=>{
+      if(e.button>0) return;
+      e.preventDefault(); h.setPointerCapture(e.pointerId);
+      const from=+row.dataset.slot, rects=rows.map(r=>r.getBoundingClientRect()), y0=e.clientY;
+      const mid=k=>rects[k].top+rects[k].height/2;
+      let to=from;
+      row.classList.add('dragging');
+      const move=ev=>{
+        const dy=ev.clientY-y0, cy=mid(from)+dy;
+        row.style.transform=`translateY(${dy}px)`;
+        to=rects.filter((r,k)=>k!==from && mid(k)<cy).length;   // new index = rows whose middle is above the finger
+        rows.forEach((r,k)=>{ if(k===from) return;
+          const s = (from<k && k<=to) ? rects[k-1].top-rects[k].top : (to<=k && k<from) ? rects[k+1].top-rects[k].top : 0;
+          r.style.transform = s ? `translateY(${s}px)` : ''; });
+      };
+      const end=()=>{
+        h.removeEventListener('pointermove',move); h.removeEventListener('pointerup',end); h.removeEventListener('pointercancel',end);
+        rows.forEach(r=>{ r.style.transform=''; r.classList.remove('dragging'); });
+        if(to!==from){ setup.seats.splice(to,0,setup.seats.splice(from,1)[0]); paintSeating(box); }
+      };
+      h.addEventListener('pointermove',move); h.addEventListener('pointerup',end); h.addEventListener('pointercancel',end);
+    });
+  });
 }
 function slotInfo(i){
   const s=setup.seats[i]; const p = s.pid ? player(s.pid) : null;
@@ -526,7 +628,8 @@ function slotHtml(i){
   const av = art?`<div class="avatar" style="background-image:url('${esc(art)}')"></div>`:`<div class="avatar" style="background:${p?p.color:COLORS[i%8]}">${esc((name||'?').slice(0,1).toUpperCase())}</div>`;
   return `<button class="slot" style="width:100%" data-slot="${i}"><span class="num">${i+1}</span>${av}
     <span class="grow" style="text-align:left"><b>${name?esc(name):'<span class="muted">Scegli giocatore</span>'}</b><br>
-    <span class="small muted">${deck?esc(deckLabel(deck)):'nessun comandante'}</span></span>${CHEVRON}</button>`;
+    <span class="small muted">${deck?esc(deckLabel(deck)):'nessun comandante'}</span></span>
+    <span class="drag" aria-label="Trascina per cambiare posto"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14M5 12h14M5 16h14"/></svg></span></button>`;
 }
 function pickSeat(i){
   const s=setup.seats[i]; const n=seatCount();
@@ -607,7 +710,9 @@ function startGame(){
   // chi gioca entra nel gruppo
   const gr=group(setup.groupId); seats.forEach(s=>{ if(s.pid && !gr.members.includes(s.pid)) gr.members.push(s.pid); });
   S.lastGroup=gr.id;
+  S.settings.layout=setup.layout;   // remembered for the next game
   S.current={id:uid(), format:setup.format, groupId:gr.id, start:Date.now(), startLife:setup.life, seats,
+    layout:layoutFam(setup.layout, setupUnits()),
     teams: setup.format==='2hg' ? [{life:setup.life,poison:0,cmd:{}},{life:setup.life,poison:0,cmd:{}}] : null,
     monarch:null, initiative:null, threat:null, outSeq:0, rules:{lethal:S.settings.cmdLethal, hgCmdMode:S.settings.hgCmdMode}};
   save(true);
@@ -656,18 +761,35 @@ function highRoll(){
 function unitName(u){ return G.format==='2hg' ? `Squadra ${u?'B':'A'}` : G.seats[u].name; }
 
 /* ---------- layout del tavolo ---------- */
-function layout(){
-  const rot = S.settings.rotate==='table';
-  const n=unitCount();
-  if(n===2) return [{x:0,y:0,w:100,h:50,r:rot?180:0},{x:0,y:50,w:100,h:50,r:0}];
-  if(!rot){ const rows=Math.ceil(n/2), out=[]; for(let i=0;i<n;i++){ const c=i%2, rr=Math.floor(i/2);
-      const last=(n%2===1 && i===n-1); out.push({x:last?0:c*50,y:rr*100/rows,w:last?100:50,h:100/rows,r:0}); } return out; }
-  const odd=n%2, rows=(n-odd)/2, h=100/(rows+odd), out=[];
-  if(odd) out.push({x:0,y:0,w:100,h,r:180});
-  for(let k=0;k<rows;k++) out.push({x:50,y:(odd?h:0)+k*h,w:50,h,r:270});   // lato destro, dall'alto in basso
-  for(let k=rows-1;k>=0;k--) out.push({x:0,y:(odd?h:0)+k*h,w:50,h,r:90});   // lato sinistro, dal basso in alto
-  return out;
+/* the requested layout if it fits n panels, otherwise the closest one that does */
+function layoutFam(fam, n){ return [fam,'sides','ends'].find(f=>Object.hasOwn(LAYOUTS,f) && LAYOUTS[f].ok(n)); }
+/* Panels of a layout in % of the board, r = rotation (0 = player at the bottom edge).
+   Every panel faces the edge of the (rectangular) table its player sits at, and slots go
+   clockwise around the table, so slot order = turn order.
+   cx, cy = position of the round menu button. */
+function slotsFor(fam, n){
+  fam = layoutFam(fam, n);
+  const out=[]; let cx=50, cy=50;
+  if(fam==='ends'){   // half the players at the top edge, half at the bottom edge
+    const k=Math.floor(n/2), m=n-k;
+    for(let i=0;i<k;i++) out.push({x:i*100/k, y:0, w:100/k, h:50, r:180});
+    for(let i=m-1;i>=0;i--) out.push({x:i*100/m, y:50, w:100/m, h:50, r:0});
+  } else if(fam==='around'){   // one player per short edge, the rest on the two long edges
+    const s=n-2, R=Math.floor(s/2), Lc=s-R, cw=100/3;
+    cx=cw;   // on the corner between columns: the narrow middle panels keep their names visible
+    out.push({x:cw, y:0, w:cw, h:50, r:180});
+    for(let i=0;i<R;i++) out.push({x:2*cw, y:i*100/R, w:cw, h:100/R, r:270});
+    out.push({x:cw, y:50, w:cw, h:50, r:0});
+    for(let i=Lc-1;i>=0;i--) out.push({x:0, y:i*100/Lc, w:cw, h:100/Lc, r:90});
+  } else {   // sides: players on the long edges, the odd one at the top
+    const odd=n%2, rows=(n-odd)/2, h=100/(rows+odd);
+    if(odd){ out.push({x:0, y:0, w:100, h, r:180}); cy=h+(100-h)/2; }
+    for(let k=0;k<rows;k++) out.push({x:50, y:(odd?h:0)+k*h, w:50, h, r:270});    // right edge, top to bottom
+    for(let k=rows-1;k>=0;k--) out.push({x:0, y:(odd?h:0)+k*h, w:50, h, r:90});   // left edge, bottom to top
+  }
+  return {fam, cells:out, cx, cy};
 }
+function layout(){ return slotsFor(G.layout, unitCount()).cells; }
 function drawBoard(){
   if(!G) return;
   const b=$('#board'); const L=layout(); b.innerHTML='';
@@ -685,10 +807,9 @@ function drawBoard(){
     p.appendChild(inner); b.appendChild(p);
     fillUnit(inner,u);
   });
-  let cy=50; const n=unitCount();
-  if(n>2 && n%2===1 && S.settings.rotate==='table'){ const rows=(n-1)/2, h=100/(rows+1); cy=h+(100-h)/2; }
+  const {cx,cy}=slotsFor(G.layout, unitCount());
   const c=document.createElement('button'); c.id='centerBtn'; c.textContent='☾'; c.setAttribute('aria-label','Menu');
-  c.style.left='50%'; c.style.top=cy+'%'; c.onclick=gameMenu; b.appendChild(c);
+  c.style.left=cx+'%'; c.style.top=cy+'%'; c.onclick=gameMenu; b.appendChild(c);
   if(pickMode){
     const bn=document.createElement('div'); bn.className='pick-banner';
     bn.innerHTML = pickMode==='threat'
@@ -1245,7 +1366,6 @@ function viewSettings(v){
     <label class="fld" style="margin-top:0">Danno da comandante nel 2v2</label><div class="seg" id="cm"><button data-v="player" class="${s.hgCmdMode==='player'?'on':''}">Per giocatore</button><button data-v="team" class="${s.hgCmdMode==='team'?'on':''}">Per squadra</button></div>
     <p class="small muted">"Per giocatore" segue 903.10a e 810.9: ognuno conta il danno subìto e chi arriva alla soglia fa perdere la squadra. "Per squadra" è una house rule.</p>
     ${step('cmdLethal','Soglia danno da comandante')}
-    <label class="fld">Orientamento dei pannelli</label><div class="seg" id="rt"><button data-v="table" class="${s.rotate==='table'?'on':''}">Dispositivo al centro del tavolo</button><button data-v="none" class="${s.rotate==='none'?'on':''}">Tutti dritti</button></div>
     <label class="row" style="margin-top:12px"><input type="checkbox" id="ka" ${s.keepAwake?'checked':''}> Schermo sempre acceso durante la partita</label>
     <label class="row" style="margin-top:8px"><input type="checkbox" id="al" ${s.cmdAlsoLife?'checked':''}> Il danno da comandante toglie anche vita</label>
   </div>
@@ -1258,7 +1378,6 @@ function viewSettings(v){
   <p class="small muted" style="text-align:center;margin-top:16px">Commander Nights <b>${esc(versionLabel())}</b> · dati carte da Scryfall · Magic: The Gathering è un marchio di Wizards of the Coast. App non ufficiale.</p>`;
   v.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ const k=b.dataset.st; s[k]=Math.max(1,s[k]+ +b.dataset.d); save(); setup=null; render(); });
   v.querySelectorAll('#cm button').forEach(b=>b.onclick=()=>{ s.hgCmdMode=b.dataset.v; save(); render(); });
-  v.querySelectorAll('#rt button').forEach(b=>b.onclick=()=>{ s.rotate=b.dataset.v; save(); render(); });
   $('#ka').onchange=e=>{ s.keepAwake=e.target.checked; save(); };
   $('#al').onchange=e=>{ s.cmdAlsoLife=e.target.checked; save(); };
   $('#exp').onclick=exportBackup;
