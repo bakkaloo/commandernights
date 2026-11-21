@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- The life counter no longer gets stuck adding or removing life on its own after a long press. It happened when a second finger (or a palm) touched the same + or − button while it was held: now the counting always stops when you lift your finger, when the app goes to the background, and in any case after about 20 seconds of holding.
+
 ## v0.4.0 — 2026-11-21
 
 ### Added

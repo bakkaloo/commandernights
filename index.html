@@ -982,16 +982,34 @@ function refreshAll(){ for(let u=0;u<unitCount();u++) refreshUnit(u); }
 
 /* tocco = ±1, tieni premuto = ±10 ripetuto */
 const pendingDelta={};
+/* A single long-press for the whole board: every new press first stops the previous one,
+   so a timer can never be orphaned (e.g. two fingers on the same button, a palm touch). */
+const HOLD_MAX_STEPS=30;   // hard cap: ±300 in ~20 s, then it stops on its own
+let holdState=null;
+function stopHold(){
+  if(!holdState) return;
+  clearTimeout(holdState.hold); clearInterval(holdState.rep);
+  window.removeEventListener('pointerup',stopHold); window.removeEventListener('pointercancel',stopHold);
+  holdState=null;
+}
+window.addEventListener('blur',stopHold);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible') stopHold(); });
 function bindHold(el,u,sign){
-  let hold=null, rep=null, fired=true;   // stays true until a pointerdown happens on this element
-  const start=e=>{ e.preventDefault(); fired=false;
+  const start=e=>{ e.preventDefault(); stopHold();
+    const h=holdState={el, pointerId:e.pointerId, fired:false, steps:0, hold:null, rep:null};
     // safety net: if the panel is redrawn mid-press, the release still reaches window
-    window.addEventListener('pointerup',cancel,{once:true}); window.addEventListener('pointercancel',cancel,{once:true});
-    hold=setTimeout(()=>{ fired=true; changeLife(u,10*sign); rep=setInterval(()=>changeLife(u,10*sign),650); },450); };
-  const end=e=>{ e.preventDefault(); clearTimeout(hold); clearInterval(rep); if(!fired) changeLife(u,sign); fired=true; };
-  const cancel=()=>{ clearTimeout(hold); clearInterval(rep); fired=true; };
+    window.addEventListener('pointerup',stopHold); window.addEventListener('pointercancel',stopHold);
+    const step=()=>{
+      if(holdState!==h || !el.isConnected || ++h.steps>HOLD_MAX_STEPS){ if(holdState===h) stopHold(); return; }
+      changeLife(u,10*sign);
+    };
+    h.hold=setTimeout(()=>{ h.fired=true; step(); if(holdState===h) h.rep=setInterval(step,650); },450); };
+  const end=e=>{ e.preventDefault(); const h=holdState;
+    if(h && h.el===el && h.pointerId===e.pointerId && !h.fired) changeLife(u,sign);
+    stopHold(); };
   el.addEventListener('pointerdown',start); el.addEventListener('pointerup',end);
-  el.addEventListener('pointerleave',cancel); el.addEventListener('pointercancel',cancel);
+  el.addEventListener('pointerleave',e=>{ if(holdState && holdState.el===el && holdState.pointerId===e.pointerId) stopHold(); });
+  el.addEventListener('pointercancel',stopHold);
   el.addEventListener('contextmenu',e=>e.preventDefault());
 }
 function add(path,d){ let o=G; for(let i=0;i<path.length-1;i++) o=o[path[i]]; const k=path[path.length-1]; o[k]=(o[k]||0)+d; save(); }
