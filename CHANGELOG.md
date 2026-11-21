@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- With 5 players in the "Tutto intorno" layout, the two players in the left column now sit at the short sides: the top one faces the top edge and the bottom one faces the bottom edge, so the table has two players at each short side and one on the right.
+
 ## v0.3.1 — 2026-11-21
 
 ### Fixed

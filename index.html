@@ -798,7 +798,8 @@ function slotsFor(fam, n){
     out.push({x:cw, y:0, w:cw, h:50, r:180});
     for(let i=0;i<R;i++) out.push({x:2*cw, y:i*100/R, w:cw, h:100/R, r:270});
     out.push({x:cw, y:50, w:cw, h:50, r:0});
-    for(let i=Lc-1;i>=0;i--) out.push({x:0, y:i*100/Lc, w:cw, h:100/Lc, r:90});
+    // with 5 players the two on the left sit at the short sides instead: bottom one faces down, top one faces up
+    for(let i=Lc-1;i>=0;i--) out.push({x:0, y:i*100/Lc, w:cw, h:100/Lc, r: n===5 ? (i ? 0 : 180) : 90});
   } else {   // sides: players on the long edges, the odd one at the top
     const odd=n%2, rows=(n-odd)/2, h=100/(rows+odd);
     if(odd){ out.push({x:0, y:0, w:100, h, r:180}); cy=h+(100-h)/2; }
