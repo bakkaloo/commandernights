@@ -155,7 +155,8 @@ svg.board-map text{fill:var(--gold);font-weight:800;text-anchor:middle;dominant-
 
 /* ---------- modali ---------- */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-end;justify-content:center}
-.sheet{background:var(--surface);width:100%;max-width:40rem;max-height:88vh;overflow-y:auto;border-radius:18px 18px 0 0;
+.sheet{background:var(--surface);width:100%;max-width:40rem;max-height:88vh;overflow-y:auto;overflow-x:hidden;   /* no sideways scroll, e.g. while the team draw names fly */
+  border-radius:18px 18px 0 0;
   padding:16px 16px calc(16px + var(--safe-b));border:1px solid var(--line)}
 .sheet h2{margin:0 0 12px;font-size:1.1rem}
 .toast{position:fixed;left:50%;top:calc(14px + var(--safe-t));pointer-events:none;max-width:86vw;text-align:center;transform:translateX(-50%);background:#2a2d3b;color:var(--text);
@@ -504,21 +505,32 @@ $('#settingsBtn').onclick=()=>{ nav.stack=[{v:'impostazioni'}]; render(); };
 function push(v){ nav.stack.push(v); render(); }
 function setTitle(t){ $('#title').textContent=t; }
 
+/* Scroll position: kept when the same page is redrawn (a choice, a stepper, a filter…), back to the top when
+   another page opens, and restored when going back to a previous page. */
+let lastViewKey=null, renderSeq=0;
+const scrollMem={};
+function viewKey(){ return nav.tab+'/'+nav.stack.map(s=>s.v+':'+(s.id||s.card?.id||'')).join('/'); }
 function render(){
+  const main=$('#view').parentElement, key=viewKey(), seq=++renderSeq;
+  if(lastViewKey) scrollMem[lastViewKey]=main.scrollTop;
+  const back = !!lastViewKey && lastViewKey.length>key.length && lastViewKey.startsWith(key);
+  const target = key===lastViewKey ? main.scrollTop : back ? (scrollMem[key]||0) : 0;
+  lastViewKey=key;
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===nav.tab && !nav.stack.length));
   const top = nav.stack[nav.stack.length-1];
   $('#backBtn').classList.toggle('hidden', !top);
   const v=$('#view');
   v.classList.remove('wide');
   if(top){
-    if(top.v==='profilo') return viewProfile(v, top.id);
-    if(top.v==='gruppo') return viewGroup(v, top.id);
-    if(top.v==='carta') return viewCard(v, top.card);
-    if(top.v==='impostazioni') return viewSettings(v);
+    if(top.v==='profilo') viewProfile(v, top.id);
+    else if(top.v==='gruppo') viewGroup(v, top.id);
+    else if(top.v==='carta') viewCard(v, top.card);
+    else if(top.v==='impostazioni') viewSettings(v);
+  } else {
+    v.classList.toggle('wide', nav.tab==='regole');   // rules + keywords side by side on large screens
+    ({partita:viewHome, gruppi:viewGroups, giocatori:viewPlayers, carte:viewCards, regole:viewRules})[nav.tab](v);
   }
-  v.classList.toggle('wide', nav.tab==='regole');   // rules + keywords side by side on large screens
-  ({partita:viewHome, gruppi:viewGroups, giocatori:viewPlayers, carte:viewCards, regole:viewRules})[nav.tab](v);
-  $('#view').parentElement.scrollTop=0;
+  if(seq===renderSeq) main.scrollTop=target;   // skip if the view already redirected with its own render()
 }
 
 /* =========================================================
@@ -1023,7 +1035,7 @@ function seatDetail(i){
   const poisonPath = hg ? ['teams',s.team,'poison'] : ['seats',i,'poison'];
   const cmdPath = teamCmd ? ['teams',s.team,'cmd'] : ['seats',i,'cmd'];
   const draw=(el,close)=>{
-    const host=cmdHostOf(i); const pois=unitTarget(u).poison;
+    const host=cmdHostOf(i); const pois=unitTarget(u).poison; const st=el.scrollTop;
     el.innerHTML=`<div class="row" style="margin-bottom:10px"><h2 class="grow">${esc(s.name)}${hg?` <span class="tag">Squadra ${s.team?'B':'A'}</span>`:''}</h2><button class="btn" data-close>Chiudi</button></div>
       ${s.commanders.length?`<div class="small muted" style="margin-bottom:6px">Tassa del comandante <span class="cr">903.8</span></div>`+s.commanders.map((c,ci)=>`
         <div class="dmg-row"><div class="thumb" style="${c.art?`background-image:url('${esc(c.art)}')`:'background:#444'}"></div>
@@ -1046,6 +1058,7 @@ function seatDetail(i){
         <button class="toggle grow ${s.blessing?'on':''}" data-bless>✦ Benedizione della città</button>
       </div>
       ${hg?'':`<button class="btn block ${s.out?'':'danger'}" style="margin-top:12px" data-out>${s.out?'Rientra in partita (errore)':'Eliminato'}</button>`}`;
+    el.scrollTop=st;   // redrawn after every tap: stay where the player was
     el.querySelector('[data-close]').onclick=close;
     el.querySelectorAll('[data-tax]').forEach(b=>b.onclick=()=>{ const ci=+b.dataset.tax, d=+b.dataset.d; if(s.tax[ci]+d<0) return; s.tax[ci]+=d; save(); refreshUnit(u); draw(el,close); });
     el.querySelector('[data-alsolife]').onchange=e=>{ S.settings.cmdAlsoLife=e.target.checked; save(); };
@@ -1128,12 +1141,13 @@ function endGameSheet(){
   const n=G.seats.length; let places=Array(n).fill(null);
   const draw=(el,close)=>{
     const next=Math.min(...[...Array(n).keys()].map(k=>k+1).filter(p=>!places.includes(p)));
-    const done=places.every(p=>p!=null);
+    const done=places.every(p=>p!=null); const st=el.scrollTop;
     el.innerHTML=`<h2>Ordine di arrivo</h2><p class="small muted" style="margin-top:-6px">${done?'Tutto pronto. Tocca un giocatore per rifare da lì.':`Tocca chi è arrivato ${next===1?'<b>primo (vincitore)</b>':`<b>${next}°</b>`}.`}</p>
       ${G.seats.map((s,i)=>`<button class="place-pick ${places[i]?'done':''}" data-i="${i}"><span class="place ${places[i]===1?'p1':''}">${places[i]?places[i]+'°':'–'}</span>
         <span class="grow"><b>${esc(s.name)}</b><br><span class="small muted">${esc(s.deckLabel||'')}${s.out?' · eliminato':''}</span></span></button>`).join('')}
       <button class="btn primary block" style="margin-top:10px" data-save ${done?'':'disabled'}>Salva risultato</button>
       <div class="row" style="margin-top:8px"><button class="btn grow" data-draw>Pareggio</button><button class="btn danger grow" data-discard>Non salvare</button></div>`;
+    el.scrollTop=st;
     el.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i;
       if(places[i]!=null){ const p=places[i]; places=places.map(x=>x!=null&&x>=p?null:x); }
       else { places[i]=next; const left=places.map((x,k)=>x==null?k:null).filter(x=>x!=null); if(left.length===1) places[left[0]]=n; }

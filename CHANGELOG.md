@@ -8,7 +8,9 @@
 ### Changed
 - With 5 players in the "Tutto intorno" layout, the two players in the left column now sit at the short sides: the top one faces the top edge and the bottom one faces the bottom edge, so the table has two players at each short side and one on the right.
 
-## v0.3.1 — 2026-11-21
+### Fixed
+- The page no longer jumps back to the top after choosing something (format, group, life, number of players, layout, a player or deck, a filter, a setting): it stays where it was. Opening another page still starts from the top, and going back with "‹" returns to where you were on the previous page.
+- In the player details during a game and in the finishing order sheet, tapping a button no longer moves the sheet's scroll position. — 2026-11-21
 
 ### Fixed
 - Publishing a new version to the website works again: the v0.3.0 deploy stopped because the publishing step could not find the built app. The changes listed under v0.3.0 reach the app with this version.
