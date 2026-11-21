@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read   # deploy-pages looks up the uploaded artifact through the Actions API
   pages: write
   id-token: write
 
@@ -16,12 +17,11 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Two jobs, as in GitHub's Pages starter workflow: the deploy job starts only after the
+# artifact upload of the build job is complete.
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
 
@@ -38,5 +38,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
