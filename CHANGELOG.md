@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.1 — 2026-11-21
+
 ### Fixed
 - Publishing a new version to the website works again: the v0.3.0 deploy stopped because the publishing step could not find the built app. The changes listed under v0.3.0 reach the app with this version.
 
