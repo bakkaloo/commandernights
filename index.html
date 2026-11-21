@@ -116,6 +116,23 @@ svg.board-map text{fill:var(--gold);font-weight:800;text-anchor:middle;dominant-
 .rules h3{font-size:.95rem;color:var(--gold);margin:16px 0 6px}
 .rules p,.rules li{font-size:.9rem;line-height:1.45}
 .rules ul{padding-left:18px;margin:4px 0}
+.wrap.wide{max-width:76rem}
+.rules-tabs{margin-bottom:12px}
+.rules-cols{display:grid;gap:12px;align-items:start}
+.rules-cols>.card{margin-bottom:0}
+@media (max-width:899px){
+  .rules-cols[data-show="rules"]>[data-col="kw"],.rules-cols[data-show="kw"]>[data-col="rules"]{display:none}
+}
+@media (min-width:900px){
+  .rules-tabs{display:none}
+  .rules-cols{grid-template-columns:1fr 1fr}
+}
+.kw{padding:9px 0;border-top:1px solid var(--line)}
+.kw:first-of-type{border-top:0}
+.kw .kn{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.kw .en{font-size:.78rem;color:var(--muted)}
+.kw .kn .cr{margin-left:auto;margin-right:0}
+.kw p{margin:4px 0 0;font-size:.9rem;line-height:1.45}
 .cr{font-size:.76rem;color:var(--gold);background:#2a2415;border-radius:5px;padding:1px 5px;margin-right:4px;white-space:nowrap}
 .history-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:.88rem}
 .history-item:last-child{border-bottom:0}
@@ -269,7 +286,6 @@ const DEFAULT_SETTINGS = {life1v1:40, ffaLife:40, hgLife:60, hgCmdMode:'player',
 /* board layouts, chosen when creating a game; ok(n) = available for n panels */
 const LAYOUTS = {ends:{l:'Fronte a fronte', ok:n=>n<=6}, around:{l:'Tutto intorno', ok:n=>n>=4},
   sides:{l:'Ai lati', ok:n=>n>=3}};
-const JUDGE_URL = 'https://claude.ai/project/01a1dc3f-3e20-7249-b5c0-effdbadf355d';
 const FORMATS = {'1v1':'1 contro 1', ffa:'Tutti contro tutti', '2hg':'2v2 Two-Headed Giant'};
 const COUNTERS = [ // segnalini e designazioni che stanno sul giocatore, non sul campo
   {k:'energia', l:'Energia'}, {k:'esperienza', l:'Esperienza'}, {k:'rad', l:'Rad', cr:'122.1i'},
@@ -479,12 +495,14 @@ function render(){
   const top = nav.stack[nav.stack.length-1];
   $('#backBtn').classList.toggle('hidden', !top);
   const v=$('#view');
+  v.classList.remove('wide');
   if(top){
     if(top.v==='profilo') return viewProfile(v, top.id);
     if(top.v==='gruppo') return viewGroup(v, top.id);
     if(top.v==='carta') return viewCard(v, top.card);
     if(top.v==='impostazioni') return viewSettings(v);
   }
+  v.classList.toggle('wide', nav.tab==='regole');   // rules + keywords side by side on large screens
   ({partita:viewHome, gruppi:viewGroups, giocatori:viewPlayers, carte:viewCards, regole:viewRules})[nav.tab](v);
   $('#view').parentElement.scrollTop=0;
 }
@@ -1273,7 +1291,7 @@ let cardQuery='', cardResults=[];
 function viewCards(v){
   setTitle('Carte');
   v.innerHTML=`<input class="txt" id="cq" placeholder="Cerca una carta (anche in italiano)" value="${esc(cardQuery)}" autocomplete="off">
-    <p class="small muted">Testo Oracle e rulings da Scryfall. Per le dispute vere usa il judge.</p><div id="cres"></div>`;
+    <p class="small muted">Testo Oracle e rulings da Scryfall.</p><div id="cres"></div>`;
   const q=$('#cq'), res=$('#cres');
   const show=()=>{ res.innerHTML = cardResults.length ? `<div class="card">${cardResults.slice(0,40).map((c,i)=>`<button class="list-item" style="width:100%" data-i="${i}">
       <div class="avatar" style="background-image:url('${esc(cardImgs(c).art)}')"></div><span class="grow" style="text-align:left"><b>${esc(c.name)}</b>${c.printed_name&&c.printed_name!==c.name?` <span class="small muted">(${esc(c.printed_name)})</span>`:''}<br>
@@ -1304,11 +1322,79 @@ async function viewCard(v,c){
 /* =========================================================
    Regole rapide (Comprehensive Rules del 6 novembre 2026)
    ========================================================= */
+/* Most used keyword abilities and keyword actions: Italian name as printed on cards, English name, rule number and the
+   Italian reminder text printed on cards (Scryfall printed_text), with N / [costo] in place of the printed number or cost.
+   5th field = 1: no reminder text is printed for it, the description is our own summary. */
+const KEYWORDS=[
+  {g:'Abilità sempreverdi', items:[
+    ['Anti-malocchio','Hexproof','702.11','Questa creatura non può essere bersaglio di magie o abilità controllate dai tuoi avversari.'],
+    ['Attacco improvviso','First strike','702.7','Questa creatura infligge danno da combattimento prima delle creature senza attacco improvviso.'],
+    ['Cautela','Vigilance','702.20','Questa creatura attacca senza TAPpare.'],
+    ['Difensore','Defender','702.3','Questa creatura non può attaccare.'],
+    ['Doppio attacco','Double strike','702.4','Questa creatura infligge sia danno da combattimento da attacco improvviso che danno da combattimento regolare.'],
+    ['Egida [costo]','Ward','702.21','Ogniqualvolta questa creatura diventa bersaglio di una magia o abilità controllata da un avversario, neutralizza quella magia o abilità a meno che quel giocatore non paghi [costo].'],
+    ['Equipaggiare [costo]','Equip','702.6','[costo]: Assegna a una creatura bersaglio che controlli. Equipaggia solo come una stregoneria.'],
+    ['Incanta','Enchant','702.5','Questa Aura può essere assegnata solo a un oggetto del tipo indicato, che è anche il bersaglio quando la lanci. Se l’oggetto non è più valido, l’Aura va nel cimitero.',1],
+    ['Indistruttibile','Indestructible','702.12','Il danno letale e gli effetti che dicono "distruggi" non distruggono questo permanente.',1],
+    ['Lampo','Flash','702.8','Puoi lanciare questa magia in ogni momento in cui potresti lanciare un istantaneo.'],
+    ['Legame vitale','Lifelink','702.15','Il danno inflitto da questa creatura ti fa anche guadagnare altrettanti punti vita.'],
+    ['Minacciare','Menace','702.111','Questa creatura non può essere bloccata tranne che da due o più creature.'],
+    ['Prodezza','Prowess','702.108','Ogniqualvolta lanci una magia non creatura, questa creatura prende +1/+1 fino alla fine del turno.'],
+    ['Protezione da [qualità]','Protection','702.16','Questa creatura non può essere bloccata, bersagliata, non le può essere inflitto danno, né può essere incantata da nulla di [qualità].'],
+    ['Raggiungere','Reach','702.17','Questa creatura può bloccare le creature con volare.'],
+    ['Rapidità','Haste','702.10','Questa creatura può attaccare e {T} non appena entra sotto il tuo controllo.'],
+    ['Tocco letale','Deathtouch','702.2','Qualsiasi danno che questa creatura infligge a una creatura è sufficiente a distruggerla.'],
+    ['Travolgere','Trample','702.19','Questa creatura può infliggere il danno da combattimento in eccesso al giocatore o al planeswalker che sta attaccando.'],
+    ['Velo','Shroud','702.18','Questa creatura non può essere bersaglio di magie o abilità.'],
+    ['Volare','Flying','702.9','Questa creatura non può essere bloccata tranne che da creature con volare o raggiungere.'],
+  ]},
+  {g:'Frequenti in Commander', items:[
+    ['Annientatore N','Annihilator','702.86','Ogniqualvolta questa creatura attacca, il giocatore in difesa sacrifica N permanenti.'],
+    ['Cangiante','Changeling','702.73','Questa carta ha tutti i tipi di creatura.'],
+    ['Cascata','Cascade','702.85','Quando lanci questa magia, esilia carte dalla cima del tuo grimorio finché non esili una carta non terra che costa meno. Puoi lanciarla senza pagare il suo costo di mana. Metti le carte esiliate in fondo al tuo grimorio in ordine casuale.'],
+    ['Ciclo [costo]','Cycling','702.29','[costo], Scarta questa carta: Pesca una carta.'],
+    ['Convocare','Convoke','702.51','Le tue creature possono aiutarti a lanciare questa magia. Ogni creatura che TAPpi mentre lanci questa magia corrisponde al pagamento di {1} o di un mana del colore di quella creatura.'],
+    ['Dissotterrare [costo]','Unearth','702.84','[costo]: Rimetti sul campo di battaglia questa carta dal tuo cimitero. Ha rapidità. Esiliala all’inizio della prossima sottofase finale o se sta per lasciare il campo di battaglia. Dissotterra solo come una stregoneria.'],
+    ['Esaltato','Exalted','702.83','Ogniqualvolta una creatura che controlli attacca da sola, prende +1/+1 fino alla fine del turno.'],
+    ['Esumare','Delve','702.66','Ogni carta che esili dal tuo cimitero mentre lanci questa magia corrisponde al pagamento di {1}.'],
+    ['Flashback [costo]','Flashback','702.34','Puoi lanciare questa carta dal tuo cimitero pagando il suo costo di flashback. Poi esiliala.'],
+    ['Immortale','Undying','702.93','Quando questa creatura muore, se non aveva segnalini +1/+1, rimettila sul campo di battaglia sotto il controllo del suo proprietario con un segnalino +1/+1.'],
+    ['Infettare','Infect','702.90','Questa creatura infligge danno alle creature sotto forma di segnalini -1/-1 e ai giocatori sotto forma di segnalini veleno.'],
+    ['Manovrare N','Crew','702.122','TAPpa un qualsiasi numero di creature che controlli con forza totale pari o superiore a N: Questo Veicolo diventa una creatura artefatto fino alla fine del turno.'],
+    ['Partner','Partner','702.124','Puoi avere due comandanti se entrambi hanno partner.'],
+    ['Persistere','Persist','702.79','Quando questa creatura muore, se non aveva segnalini -1/-1, rimettila sul campo di battaglia sotto il controllo del suo proprietario con un segnalino -1/-1.'],
+    ['Sospendere N—[costo]','Suspend','702.62','Invece di lanciare questa carta dalla tua mano, puoi pagare [costo] ed esiliarla con N segnalini tempo su di essa. All’inizio del tuo mantenimento, rimuovi un segnalino tempo. Quando l’ultimo viene rimosso, lancia la carta senza pagare il suo costo di mana.'],
+    ['Tossico N','Toxic','702.164','I giocatori a cui viene inflitto danno da combattimento da questa creatura ottengono anche N segnalini veleno.'],
+  ]},
+  {g:'Azioni chiave', items:[
+    ['Esplorare','Explore','','Rivela la prima carta del tuo grimorio. Se è una terra, aggiungila alla tua mano. Altrimenti, metti un segnalino +1/+1 su questa creatura, poi rimetti quella carta al suo posto o mettila nel tuo cimitero.'],
+    ['Investigare','Investigate','','Crea una pedina Indizio. È un artefatto con "{2}, Sacrifica questo artefatto: Pesca una carta".'],
+    ['Lottare','Fight','','Ogni creatura infligge all’altra danno pari alla propria forza.'],
+    ['Macinare N','Mill','','Per macinare N carte, metti nel tuo cimitero le prime N carte del tuo grimorio.'],
+    ['Neutralizzare','Counter','','Una magia o abilità neutralizzata viene rimossa dalla pila senza risolversi; una magia neutralizzata va nel cimitero del proprietario.',1],
+    ['Profetizzare N','Scry','','Per profetizzare N, guarda le prime N carte del tuo grimorio, poi mettine un qualsiasi numero in fondo e le altre in cima in qualsiasi ordine.'],
+    ['Proliferare','Proliferate','','Scegli un qualsiasi numero di permanenti e/o giocatori, poi metti su ognuno un altro segnalino di ogni tipo già presente.'],
+    ['Sacrificare','Sacrifice','','Metti un permanente che controlli nel cimitero del proprietario. Non è "distruggere": indistruttibile e rigenerazione non lo impediscono.',1],
+    ['Sorvegliare N','Surveil','','Guarda le prime N carte del tuo grimorio, poi mettine un qualsiasi numero nel tuo cimitero e le altre in cima al tuo grimorio in qualsiasi ordine.'],
+  ]},
+];
+let rulesTab='rules', kwQuery='';   // tab shown on phones, keyword filter
+function keywordsHtml(){
+  const q=kwQuery.toLowerCase();
+  const html=KEYWORDS.map(gr=>{
+    const items=gr.items.filter(([it,en])=>!q || it.toLowerCase().includes(q) || en.toLowerCase().includes(q))
+      .sort((a,b)=>a[0].localeCompare(b[0],'it'));
+    return items.length ? `<h3>${esc(gr.g)}</h3>`+items.map(([it,en,cr,d,own])=>`<div class="kw"><div class="kn"><b>${esc(it)}</b><span class="en">${esc(en)}</span>${cr?`<span class="cr">${cr}</span>`:''}</div>
+      <p>${own ? `${esc(d)} <span class="tag">riassunto</span>` : `<i>(${esc(d)})</i>`}</p></div>`).join('') : '';
+  }).join('');
+  return html || '<div class="empty">Nessuna parola chiave trovata</div>';
+}
 function viewRules(v){
   setTitle('Regole rapide');
-  v.innerHTML=`<div class="card"><a class="btn primary block" href="${JUDGE_URL}" target="_blank" rel="noopener" style="text-decoration:none">§ Apri il judge (progetto Claude)</a>
-    <p class="small muted" style="margin-bottom:0">Riassunti per consultazione veloce, dalle Comprehensive Rules in vigore dal 6 novembre 2026. Per una disputa vale il testo completo: chiedi al judge.</p></div>
-  <div class="card rules">
+  v.innerHTML=`<div class="card"><p class="small muted" style="margin:0">Riassunti per consultazione veloce, dalle Comprehensive Rules in vigore dal 6 novembre 2026. Per una disputa vale il testo completo delle regole.</p></div>
+  <div class="seg rules-tabs" id="rtab"><button data-t="rules" class="${rulesTab==='rules'?'on':''}">Regole</button><button data-t="kw" class="${rulesTab==='kw'?'on':''}">Parole chiave</button></div>
+  <div class="rules-cols" data-show="${rulesTab}">
+  <div class="card rules" data-col="rules">
     <h3>Commander</h3><ul>
       <li><span class="cr">903.7</span>Ogni giocatore parte da 40 vita e pesca 7 carte.</li>
       <li><span class="cr">903.8</span>Tassa: lanciare il comandante dalla zona di comando costa {2} in più per ogni volta che l'hai già lanciato da lì in questa partita.</li>
@@ -1350,7 +1436,17 @@ function viewRules(v){
       <li><span class="cr">103.1</span>Chi inizia si decide con un metodo condiviso (dado, moneta…): l'app propone il d20 a inizio partita.</li>
       <li><span class="cr">500.1</span>Inizio (stap, mantenimento, acquisizione), prima fase principale, combattimento, seconda fase principale, finale (sottofase finale, cancellazione).</li>
     </ul>
-  </div>`;
+  </div>
+  <div class="card rules" data-col="kw">
+    <input class="txt" id="kwq" placeholder="Cerca parola chiave (italiano o inglese)" value="${esc(kwQuery)}" autocomplete="off">
+    <p class="small muted" style="margin:8px 0 0">Testo di richiamo come stampato sulle carte italiane. N e [costo] stanno per il numero o il costo indicato sulla carta. Le voci con <span class="tag">riassunto</span> non hanno un testo di richiamo stampato.</p>
+    <div id="kwl">${keywordsHtml()}</div>
+  </div></div>`;
+  v.querySelectorAll('#rtab [data-t]').forEach(b=>b.onclick=()=>{ rulesTab=b.dataset.t;
+    v.querySelectorAll('#rtab [data-t]').forEach(x=>x.classList.toggle('on', x===b));
+    v.querySelector('.rules-cols').dataset.show=rulesTab; });
+  const q=v.querySelector('#kwq');
+  q.oninput=()=>{ kwQuery=q.value.trim(); v.querySelector('#kwl').innerHTML=keywordsHtml(); };
 }
 
 /* =========================================================

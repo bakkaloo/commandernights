@@ -5,9 +5,11 @@
 ### Added
 - When creating a game you now choose how the players sit around the table: "Fronte a fronte" (half on each short side), "Tutto intorno" (one per short side, the others on the long sides) or "Ai lati" (on the long sides). Every life total faces the player sitting on that side. Each option shows a small preview of the board, and only the layouts that fit the number of players are offered. The last choice is remembered for the next game.
 - New "Ordine dei giocatori" in the game setup: a small map shows the numbered seats, clockwise like the turn order, and the number next to each player is their seat. Drag a player by the ≡ handle to change the order, or use "Posti a caso" to shuffle the seats. In 2v2, dragging a player into the other team's box moves them to that team.
+- New "Parole chiave" column in the Rules page: the most used keyword abilities and keyword actions with their Italian name as printed on cards, the English name (to recognize them on English cards), the rule number and the reminder text printed on Italian cards. The few keywords without a printed reminder text have a short summary, marked "riassunto". It has a search box that works with Italian and English names. On tablets it sits next to the rules, on phones you switch between "Regole" and "Parole chiave".
 
 ### Removed
 - The "Orientamento dei pannelli" setting and the "Tutti dritti" orientation: panels always face the players around the table. Games and settings that used another orientation switch to "Ai lati".
+- The link to the judge (a private Claude project the rest of the group could not open) from the Rules page, and the mention of it in the card search.
 
 ## v0.2.1 — 2026-11-17
 

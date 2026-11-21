@@ -23,7 +23,7 @@
 
 - [ ] **Eliminazioni**: sostituire la tripla conferma con una conferma singola + toast "Annulla" di qualche secondo (ripristino da una copia dei dati).
 - [ ] **Bracket del mazzo**: in `editDeck` il bracket viene salvato anche senza premere "Salva" (modifica direttamente `d`). Usare una variabile temporanea e applicarla solo al salvataggio.
-- [ ] **Link al judge** (`JUDGE_URL`): punta a un progetto Claude privato, gli altri del gruppo non riescono ad aprirlo. Renderlo configurabile nelle impostazioni o spiegare che serve l'accesso.
+- [x] **Link al judge** (`JUDGE_URL`): *(risolto: link rimosso dalla sezione Regole)* punta a un progetto Claude privato, gli altri del gruppo non riescono ad aprirlo. Renderlo configurabile nelle impostazioni o spiegare che serve l'accesso.
 - [ ] **Zoom**: `user-scalable=no` blocca lo zoom ovunque. Ok sul tavolo da gioco, ma andrebbe permesso su regole e schede delle carte.
 
 ## 5. Idee future
